@@ -20,6 +20,8 @@
         "FOUR_C_WITH_GOOGLETEST": "ON",
         "FOUR_C_WITH_ARBORX": "ON",
         "FOUR_C_WITH_MIRCO": "ON",
+        // "FOUR_C_MIRCO_FIND_INSTALLED": "ON",
+        // "FOUR_C_MIRCO_ROOT": "/home/a11brish/Documents/mirco_4c/build",
         "FOUR_C_BUILD_SHARED_LIBS": "OFF"
       }
     },

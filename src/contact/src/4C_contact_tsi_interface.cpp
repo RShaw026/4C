@@ -20,6 +20,9 @@
 #include "4C_mortar_dofset.hpp"
 #include "4C_mortar_element.hpp"
 #include "4C_mortar_node.hpp"
+#include <mirco_iterate.h>
+#include <mirco_topology.h>
+#include <mirco_topologyutilities.h>
 
 FOUR_C_NAMESPACE_OPEN
 
@@ -696,6 +699,64 @@ void CONTACT::TSIInterface::assemble_lin_l_mn_dm_temp(
     const Core::LinAlg::Matrix<3, 1> lm(cnode->mo_data().lm(), true);
     const double lm_n = lm.dot(n);
 
+
+    std::cout << "The lagrange multiplier normal component is " << lm_n << std::endl;
+
+    int resolution_ = 6;
+    double lateral_length = 0.02;
+    double GridSize = lateral_length / (pow(2, resolution_) + 1);
+
+    const int iter = int(ceil((lateral_length - (GridSize / 2)) / GridSize));
+    std::vector<double> meshgrid_(iter);
+    MIRCO::CreateMeshgrid(meshgrid_, iter, GridSize);
+
+    Core::LinAlg::SerialDenseMatrix topology_;
+  
+    const int N = pow(2, resolution_);
+    topology_.shape(N + 1, N + 1);
+
+    std::string topologyFilePath = "";
+    Teuchos::RCP<MIRCO::TopologyGeneration> surfacegenerator;
+    // creating the correct surface object
+    MIRCO::CreateSurfaceObject(resolution_, 20.0, 0.7,
+        false, topologyFilePath, true, 95,
+        surfacegenerator);
+    surfacegenerator->GetSurface(topology_);
+
+    auto max_and_mean = MIRCO::ComputeMaxAndMean(topology_);
+    double maxTopologyHeight_ = max_and_mean.max_;
+
+    double contactarea = 0.0;
+    if (lm_n > 10e-6)
+    {
+      MIRCO::Iterate(contactarea, lm_n, 7.0, lateral_length, GridSize, 0.01, 1, 0.5494505494505494, true, 640.1299243542808, topology_, maxTopologyHeight_, meshgrid_, false);
+    }
+    double newfactor = -25000;
+
+    
+    double product;
+    if(true)
+    {
+      product = fac * lm_n;
+    }
+    else
+    {
+      product = newfactor * contactarea;
+    }
+
+    double deriv = fac;
+    if(true)
+    {
+      deriv = fac;
+    }
+    else
+    {
+      if(lm_n > 10e-6)
+      {
+        deriv = product/lm_n;
+      }
+    }
+
     for (_cimm k = cnode->data().get_deriv_d().begin(); k != cnode->data().get_deriv_d().end(); ++k)
     {
       Core::Nodes::Node* knode = discret().g_node(k->first);
@@ -703,7 +764,7 @@ void CONTACT::TSIInterface::assemble_lin_l_mn_dm_temp(
       double temp_k = dynamic_cast<Node*>(knode)->tsi_data().temp();
       for (_cim l = k->second.begin(); l != k->second.end(); ++l)
         if (abs(l->second) > 1.e-12)
-          lin_disp->fe_assemble(fac * lm_n * temp_k * l->second, cnode->dofs()[0], l->first);
+          lin_disp->fe_assemble(product * temp_k * l->second, cnode->dofs()[0], l->first);
     }
     for (_cimm k = cnode->data().get_deriv_m().begin(); k != cnode->data().get_deriv_m().end(); ++k)
     {
@@ -712,7 +773,7 @@ void CONTACT::TSIInterface::assemble_lin_l_mn_dm_temp(
       double temp_k = dynamic_cast<Node*>(knode)->tsi_data().temp();
       for (_cim l = k->second.begin(); l != k->second.end(); ++l)
         if (abs(l->second) > 1.e-12)
-          lin_disp->fe_assemble(-fac * lm_n * temp_k * l->second, cnode->dofs()[0], l->first);
+          lin_disp->fe_assemble(-product * temp_k * l->second, cnode->dofs()[0], l->first);
     }
 
     for (_cip k = cnode->mo_data().get_d().begin(); k != cnode->mo_data().get_d().end(); ++k)
@@ -726,10 +787,10 @@ void CONTACT::TSIInterface::assemble_lin_l_mn_dm_temp(
             l != cnode->data().get_deriv_n()[d].end(); ++l)
           if (abs(l->second) > 1.e-12)
             lin_disp->fe_assemble(
-                lm(d) * k->second * l->second * fac * temp_k, cnode->dofs()[0], l->first);
+                lm(d) * k->second * l->second * deriv * temp_k, cnode->dofs()[0], l->first);
 
       for (int d = 0; d < 3; ++d)
-        lin_lm->fe_assemble(n(d) * temp_k * fac * k->second, cnode->dofs()[0], cnode->dofs()[d]);
+        lin_lm->fe_assemble(n(d) * temp_k * deriv * k->second, cnode->dofs()[0], cnode->dofs()[d]);
     }
 
     for (_cim k = cnode->mo_data().get_m().begin(); k != cnode->mo_data().get_m().end(); ++k)
@@ -743,10 +804,10 @@ void CONTACT::TSIInterface::assemble_lin_l_mn_dm_temp(
             l != cnode->data().get_deriv_n()[d].end(); ++l)
           if (abs(l->second) > 1.e-12)
             lin_disp->fe_assemble(
-                -lm(d) * k->second * l->second * fac * temp_k, cnode->dofs()[0], l->first);
+                -lm(d) * k->second * l->second * deriv * temp_k, cnode->dofs()[0], l->first);
 
       for (int d = 0; d < 3; ++d)
-        lin_lm->fe_assemble(-n(d) * temp_k * fac * k->second, cnode->dofs()[0], cnode->dofs()[d]);
+        lin_lm->fe_assemble(-n(d) * temp_k * deriv * k->second, cnode->dofs()[0], cnode->dofs()[d]);
     }
   }
 
@@ -773,13 +834,58 @@ void CONTACT::TSIInterface::assemble_dm_l_mn(const double fac, Core::LinAlg::Spa
     const Core::LinAlg::Matrix<3, 1> lm(cnode->mo_data().lm(), true);
     const double lm_n = lm.dot(n);
 
+    // std::cout << "The lagrange multiplier normal component is " << lm_n << std::endl;
+
+    int resolution_ = 6;
+    double lateral_length = 0.02;
+    double GridSize = lateral_length / (pow(2, resolution_) + 1);
+
+    const int iter = int(ceil((lateral_length - (GridSize / 2)) / GridSize));
+    std::vector<double> meshgrid_(iter);
+    MIRCO::CreateMeshgrid(meshgrid_, iter, GridSize);
+
+    Core::LinAlg::SerialDenseMatrix topology_;
+  
+    const int N = pow(2, resolution_);
+    topology_.shape(N + 1, N + 1);
+
+    std::string topologyFilePath = "";
+    Teuchos::RCP<MIRCO::TopologyGeneration> surfacegenerator;
+    // creating the correct surface object
+    MIRCO::CreateSurfaceObject(resolution_, 20.0, 0.7,
+        false, topologyFilePath, true, 95,
+        surfacegenerator);
+    surfacegenerator->GetSurface(topology_);
+
+    auto max_and_mean = MIRCO::ComputeMaxAndMean(topology_);
+    double maxTopologyHeight_ = max_and_mean.max_;
+
+    double contactarea = 0.0;
+    if (lm_n > 10e-6)
+    {
+      MIRCO::Iterate(contactarea, lm_n, 7.0, lateral_length, GridSize, 0.01, 1, 0.5494505494505494, true, 640.1299243542808, topology_, maxTopologyHeight_, meshgrid_, false);
+    }
+    double newfactor = -25000;
+
+    
+    double product;
+    if(true)
+    {
+      product = fac * lm_n;
+    }
+    else
+    {
+      product = newfactor * contactarea;
+    }
+    
+
     for (_cip k = cnode->mo_data().get_d().begin(); k != cnode->mo_data().get_d().end(); ++k)
       if (abs(k->second) > 1.e-12)
       {
         Core::Nodes::Node* knode = discret().g_node(k->first);
         if (!knode) FOUR_C_THROW("node not found");
         CONTACT::Node* kcnode = dynamic_cast<CONTACT::Node*>(knode);
-        DM_LMn->fe_assemble(fac * lm_n * k->second, cnode->dofs()[0], kcnode->dofs()[0]);
+        DM_LMn->fe_assemble(product * k->second, cnode->dofs()[0], kcnode->dofs()[0]);
       }
 
     for (_cim k = cnode->mo_data().get_m().begin(); k != cnode->mo_data().get_m().end(); ++k)
@@ -788,7 +894,7 @@ void CONTACT::TSIInterface::assemble_dm_l_mn(const double fac, Core::LinAlg::Spa
         Core::Nodes::Node* knode = discret().g_node(k->first);
         if (!knode) FOUR_C_THROW("node not found");
         CONTACT::Node* kcnode = dynamic_cast<CONTACT::Node*>(knode);
-        DM_LMn->fe_assemble(-fac * lm_n * k->second, cnode->dofs()[0], kcnode->dofs()[0]);
+        DM_LMn->fe_assemble(-product * k->second, cnode->dofs()[0], kcnode->dofs()[0]);
       }
   }
   return;
