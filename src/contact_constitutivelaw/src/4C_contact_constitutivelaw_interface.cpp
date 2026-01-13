@@ -42,6 +42,7 @@ void CONTACT::ConstitutivelawInterface::assemble_reg_normal_forces(
 
     const int dim = cnode->num_dof();
     const double gap = cnode->data().getg();
+    // std::cout << "Node " << gid << " gap: " << gap << std::endl;
 
     const double kappa = cnode->data().kappa();
 
@@ -86,6 +87,8 @@ void CONTACT::ConstitutivelawInterface::assemble_reg_normal_forces(
       const double pressure = coconstlaw_->evaluate(kappa * gap, cnode);
       // Evaluate pressure derivative
       const double pressurederiv = coconstlaw_->evaluate_derivative(kappa * gap, cnode);
+
+      std::cout << "Node " << gid << " pressure: " << pressure << " Gap: "<< gap << std::endl;
 
       localisincontact = true;
 

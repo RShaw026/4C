@@ -1,0 +1,114 @@
+TITLE:
+  - "3D finite deformation contact test between rough gear surfaces"
+PROBLEM TYPE:
+  PROBLEMTYPE: "Structure"
+PROBLEM SIZE:
+  DIM: 3
+DISCRETISATION:
+  NUMFLUIDDIS: 0
+  NUMALEDIS: 0
+  NUMTHERMDIS: 0
+IO:
+  STRUCT_STRESS: "2PK"
+STRUCTURAL DYNAMIC:
+  INT_STRATEGY: "Standard"
+  DYNAMICTYPE: "Statics"
+  TIMESTEP: 0.05
+  NUMSTEP: 20
+  MAXTIME: 1
+  LINEAR_SOLVER: 1
+STRUCT NOX/Status Test:
+  XML File: "rough_contact_solver.xml"
+CONTACT DYNAMIC:
+  LINEAR_SOLVER: 1
+  STRATEGY: "MultiScale"
+MORTAR COUPLING:
+  LM_SHAPEFCN: "Standard"
+  SEARCH_ALGORITHM: "BruteForce"
+  LM_DUAL_CONSISTENT: "none"
+SOLVER 1:
+  SOLVER: "UMFPACK"
+  NAME: "Structure_Solver"
+IO/RUNTIME VTK OUTPUT:
+  INTERVAL_STEPS: 1
+IO/RUNTIME VTK OUTPUT/STRUCTURE:
+  OUTPUT_STRUCTURE: true
+  DISPLACEMENT: true
+  ELEMENT_OWNER: true
+  ELEMENT_GID: true
+  STRESS_STRAIN: true
+FUNCT1:
+  - COMPONENT: 0
+    SYMBOLIC_FUNCTION_OF_SPACE_TIME: "a"
+  - VARIABLE: 0
+    NAME: "a"
+    TYPE: "linearinterpolation"
+    NUMPOINTS: 3
+    TIMES: [0, 0.02, 1]
+    VALUES: [0, 0.024, 0.05]
+FUNCT2:
+  - COMPONENT: 0
+    SYMBOLIC_FUNCTION_OF_SPACE_TIME: "0.5"
+FUNCT3:
+  - COMPONENT: 0
+    SYMBOLIC_FUNCTION_OF_SPACE_TIME: "0.0001"
+MATERIALS:
+  - MAT: 1
+    MAT_Struct_StVenantKirchhoff:
+      YOUNG: 1
+      NUE: 0.3
+      DENS: 1
+  - MAT: 2
+    MAT_Struct_StVenantKirchhoff:
+      YOUNG: 1
+      NUE: 0.3
+      DENS: 1
+CONTACT CONSTITUTIVE LAWS:
+  - LAW: 1
+    CoConstLaw_mirco:
+      FirstMatID: 1
+      SecondMatID: 2
+      LateralLength: 0.001
+      Resolution: 6
+      InitialTopologyStdDeviationFunct: 3
+      HurstExponentFunct: 2
+      RandomGeneratorSeed: 71
+      MaxIteration: 100
+DESIGN SURF DIRICH CONDITIONS:
+  - E: 3
+    ENTITY_TYPE: node_set_id
+    NUMDOF: 3
+    ONOFF: [1, 1, 1]
+    VAL: [0, 0, 0]
+    FUNCT: [0, 0, 0]
+  - E: 4
+    ENTITY_TYPE: node_set_id
+    NUMDOF: 3
+    ONOFF: [1, 1, 1]
+    VAL: [1, 0, 0]
+    FUNCT: [1, 0, 0]
+DESIGN SURF MORTAR CONTACT CONDITIONS 3D:
+  - E: 1
+    ENTITY_TYPE: node_set_id
+    InterfaceID: 0
+    Side: "Master"
+    ConstitutiveLawID: 1
+  - E: 2
+    ENTITY_TYPE: node_set_id
+    InterfaceID: 0
+    Side: "Slave"
+    ConstitutiveLawID: 1
+STRUCTURE GEOMETRY:
+  SHOW_INFO: "summary"
+  ELEMENT_BLOCKS:
+    - ID: 1
+      SOLID:
+        HEX8:
+          MAT: 1
+          KINEM: nonlinear
+    - ID: 2
+      SOLID:
+        HEX8:
+          MAT: 2
+          KINEM: nonlinear
+  FILE: spur_gear_tooth_complete.vtu
